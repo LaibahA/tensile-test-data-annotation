@@ -34,7 +34,7 @@ The standalone script requires an internet connection to download the dataset fr
 
 Generated files are saved under `annotatedOutputs/`:
 
-- **Turtle (`.ttl`)** — RDF knowledge graph
+- **Turtle (`.ttl`)** — RDF knowledge graph in TTL format
 - **JSON-LD (`.jsonld`)** — RDF knowledge graph in JSON-LD format
 - **CSV (`.csv`)** — Force and elongation measurements for individual tests
 
