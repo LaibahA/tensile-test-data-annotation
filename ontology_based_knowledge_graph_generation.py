@@ -380,7 +380,7 @@ for filename in os.listdir(input_dir):
 
             #Represents the dataset
             datasetIRI = URIRef(experimentIRI + "_dataset")
-            g.add((processIRI, PMD.PMD_0000016, datasetIRI)) #processIRI has output dataset datasetIRI
+            g.add((processIRI, OBO.RO_0002234, datasetIRI)) #processIRI has output dataset datasetIRI
             g.add((datasetIRI, RDF.type, CSVW.Table)) # is a table
             csv_name = process_id + "_data.csv"
             g.add((datasetIRI, CSVW.url, URIRef(f"https://zenodo.org/records/19007867/files/{csv_name}")))
