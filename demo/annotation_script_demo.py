@@ -407,7 +407,7 @@ for filename in os.listdir(input_dir):
             print("Annotation complete.")
 
 #Serializing in jsonld and ttl
-g.serialize(os.path.join(output_dir_jsonld, f"annotated_{filename}.jsonld"), format="json-ld")
-g.serialize(os.path.join(output_dir_ttl, f"annotated_{filename}.ttl"), format="turtle")
+g.serialize(os.path.join(output_dir_jsonld, "annotated_all_tests.jsonld"), format="json-ld")
+g.serialize(os.path.join(output_dir_ttl, "annotated_all_tests.ttl"), format="turtle")
 print("Serialization complete.")
 print("All annotated data will be found at output directory.")
