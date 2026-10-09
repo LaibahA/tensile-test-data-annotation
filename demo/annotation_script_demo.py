@@ -114,9 +114,9 @@ if input_dir is None:
     raise FileNotFoundError("Could not find 'jsonFiles' directory after extraction.")
 
 #Output directory names for the annotated jsonld, ttl, and csv files. If they don't exist, this will create them.
-output_dir_jsonld = "outputIndividualGraphs/annotated_metals_jsonld"
-output_dir_ttl = "outputIndividualGraphs/annotated_metals_ttl"
-output_dir_csv = "outputIndividualGraphs/metals_csv_data"
+output_dir_jsonld = "annotatedOutputs/annotated_metals_jsonld"
+output_dir_ttl = "annotatedOutputs/annotated_metals_ttl"
+output_dir_csv = "annotatedOutputs/metals_csv_data"
 os.makedirs(output_dir_jsonld, exist_ok=True)
 os.makedirs(output_dir_ttl, exist_ok=True)
 os.makedirs(output_dir_csv, exist_ok=True)
@@ -199,42 +199,42 @@ schema = {
         "raw_data"
     ]
 }
+#Empty graph to store triples
+g = Graph()
+
+#Define ontology namespaces. This helps us access and reference them throughout the script.
+TTO = Namespace("https://materialdigital.github.io/application-ontologies/tto/#/")  #Tensile testing ontology terms
+PMD = Namespace("https://materialdigital.github.io/core-ontology/") #Core terms for materials science and engineering
+QUDT = Namespace("http://qudt.org/vocab/unit/") #Measurment units
+OBO = Namespace("http://purl.obolibrary.org/obo/") #Reusable scientific vocabulary terms
+CSVW = Namespace("http://www.w3.org/ns/csvw#") #CSV metadata terms
+DC = Namespace("http://purl.org/dc/terms/") #Metadata such as title, date, etc
+
+#Bind namespace prefixes to the graph. This makes our RDF output more readable.
+g.bind("tto", TTO)
+g.bind("pmd", PMD)
+g.bind("qudt", QUDT)
+g.bind("obo", OBO)
+g.bind("csvw", CSVW)
+g.bind("dc", DC)
+
+#Define base namespace according to API URL. This allows us to create URIs (unique identifiers) for annotated entities.
+prefix = Namespace(api_url)
+g.bind("prefix", prefix)
+
+#Create an ontology entity, and import ontologies vocabulary so we can them it to annotate tensile testing data.
+onto = URIRef(prefix) #We need to create an ontology entity to enforce that our RDF file is an ontology based dataset.
+g.add((onto, RDF.type, OWL.Ontology))
+for ns in [TTO, PMD, QUDT, OBO, CSVW, DC]:
+    g.add((onto, OWL.imports, URIRef(ns)))
+
+#Adding metadata to describe the ontology entity.
+g.add((onto, DC.title, Literal("Tensile Test Ontology (TTO) A-Box Data Mapping Example", datatype=XSD.string)))
+g.add((onto, OWL.versionInfo, Literal("3.0.0", datatype=XSD.string)))
+g.add((onto, DC.description, Literal("This is an exemplary A-Box (instance data) representing tensile test results performed on an metal samples according to ISO 6892-1:2019-11. The data originates from a publicly available dataset hosted on Zenodo: https://zenodo.org/records/19007867. The semantic structure is based on the Tensile Test Ontology (TTO) version 3.0 (https://github.com/materialdigital/tensile-test-ontology), complemented primarily by concepts from the PMD Core Ontology (PMDco).", datatype=XSD.string)))
+
 #Loop through each JSON file in the input directory
 for filename in os.listdir(input_dir):
-    #Empty graph to store triples
-    g = Graph()
-
-    #Define ontology namespaces. This helps us access and reference them throughout the script.
-    TTO = Namespace("https://materialdigital.github.io/application-ontologies/tto/#/")  #Tensile testing ontology terms
-    PMD = Namespace("https://materialdigital.github.io/core-ontology/") #Core terms for materials science and engineering
-    QUDT = Namespace("http://qudt.org/vocab/unit/") #Measurment units
-    OBO = Namespace("http://purl.obolibrary.org/obo/") #Reusable scientific vocabulary terms
-    CSVW = Namespace("http://www.w3.org/ns/csvw#") #CSV metadata terms
-    DC = Namespace("http://purl.org/dc/terms/") #Metadata such as title, date, etc
-
-    #Bind namespace prefixes to the graph. This makes our RDF output more readable.
-    g.bind("tto", TTO)
-    g.bind("pmd", PMD)
-    g.bind("qudt", QUDT)
-    g.bind("obo", OBO)
-    g.bind("csvw", CSVW)
-    g.bind("dc", DC)
-
-    #Define base namespace according to API URL. This allows us to create URIs (unique identifiers) for annotated entities.
-    prefix = Namespace(api_url)
-    g.bind("prefix", prefix)
-
-    #Create an ontology entity, and import ontologies vocabulary so we can them it to annotate tensile testing data.
-    onto = URIRef(prefix) #We need to create an ontology entity to enforce that our RDF file is an ontology based dataset.
-    g.add((onto, RDF.type, OWL.Ontology))
-    for ns in [TTO, PMD, QUDT, OBO, CSVW, DC]:
-        g.add((onto, OWL.imports, URIRef(ns)))
-
-    #Adding metadata to describe the ontology entity.
-    g.add((onto, DC.title, Literal("Tensile Test Ontology (TTO) A-Box Data Mapping Example", datatype=XSD.string)))
-    g.add((onto, OWL.versionInfo, Literal("3.0.0", datatype=XSD.string)))
-    g.add((onto, DC.description, Literal("This is an exemplary A-Box (instance data) representing tensile test results performed on an metal samples according to ISO 6892-1:2019-11. The data originates from a publicly available dataset hosted on Zenodo: https://zenodo.org/records/19007867. The semantic structure is based on the Tensile Test Ontology (TTO) version 3.0 (https://github.com/materialdigital/tensile-test-ontology), complemented primarily by concepts from the PMD Core Ontology (PMDco).", datatype=XSD.string)))
-
 
     print(f"Beginning JSON validation and annotation for file: {filename}.")
     if filename.endswith(".json"):
@@ -406,8 +406,8 @@ for filename in os.listdir(input_dir):
             g.add((elongationColumnIRI, CSVW.propertyUrl, TTO.TTO_0000004)) #Every value in the column corresponds to elongation from TTO
             print("Annotation complete.")
 
-            #Serializing in jsonld and ttl
-            g.serialize(os.path.join(output_dir_jsonld, f"annotated_{filename}.jsonld"), format="json-ld")
-            g.serialize(os.path.join(output_dir_ttl, f"annotated_{filename}.ttl"), format="turtle")
-
+#Serializing in jsonld and ttl
+g.serialize(os.path.join(output_dir_jsonld, f"annotated_{filename}.jsonld"), format="json-ld")
+g.serialize(os.path.join(output_dir_ttl, f"annotated_{filename}.ttl"), format="turtle")
+print("Serialization complete.")
 print("All annotated data will be found at output directory.")
