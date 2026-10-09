@@ -1,4 +1,3 @@
 rdflib
-os
-json
-notebook
+requests
+jsonschema
