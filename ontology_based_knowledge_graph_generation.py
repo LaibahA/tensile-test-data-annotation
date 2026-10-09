@@ -114,9 +114,9 @@ if input_dir is None:
     raise FileNotFoundError("Could not find 'jsonFiles' directory after extraction.")
 
 #Output directory names for the annotated jsonld, ttl, and csv files. If they don't exist, this will create them.
-output_dir_jsonld = "outputCombinedGraph/annotated_metals_jsonld"
-output_dir_ttl = "outputCombinedGraph/annotated_metals_ttl"
-output_dir_csv = "outputCombinedGraph/metals_csv_data"
+output_dir_jsonld = "annotatedOutputs/annotated_metals_jsonld"
+output_dir_ttl = "annotatedOutputs/annotated_metals_ttl"
+output_dir_csv = "annotatedOutputs/metals_csv_data"
 os.makedirs(output_dir_jsonld, exist_ok=True)
 os.makedirs(output_dir_ttl, exist_ok=True)
 os.makedirs(output_dir_csv, exist_ok=True)
