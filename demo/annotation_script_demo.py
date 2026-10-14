@@ -130,6 +130,16 @@ schema = {
         "sample": {"type": "string", "minLength": 1},
         "date": {"type": "string", "format": "date"},
         "material": {"type": "string"},
+        "units": {
+            "type": "object",
+            "properties": {
+                "width": {"type": "string"},
+                "thickness": {"type": "string"},
+                "elongation": {"type": "string"},
+                "force": {"type": "string"}
+            },
+            "required": ["width", "thickness", "elongation", "force"]
+        },
 
         "Geometry": {
             "type": "object",
@@ -192,6 +202,7 @@ schema = {
     "required": [
         "sample",
         "material",
+        "units",
         "Geometry",
         "youngs_modulus",
         "yield_strength",
@@ -217,6 +228,25 @@ g.bind("qudt", QUDT)
 g.bind("obo", OBO)
 g.bind("csvw", CSVW)
 g.bind("dc", DC)
+
+#Maps the unit text found in the JSON to a QUDT unit. Keys must be lowercase.
+LENGTH_UNITS = {
+    "mm": QUDT.MilliM,
+    "cm": QUDT.CentiM,
+    "m":  QUDT.M,
+    "in": QUDT.IN,
+}
+PRESSURE_UNITS = {
+    "pa":  QUDT.PA,
+    "mpa": QUDT.MegaPA,
+    "gpa": QUDT.GigaPA,
+}
+FORCE_UNITS = {
+    "n": QUDT.N
+}
+
+def normalize_unit(unit_text):
+    return str(unit_text).strip().lower()
 
 #Define base namespace according to API URL. This allows us to create URIs (unique identifiers) for annotated entities.
 prefix = Namespace(api_url)
@@ -265,9 +295,20 @@ for filename in os.listdir(input_dir):
             ysUnit = data["yield_strength"]["units"]
             safVal = data["strain_at_fracture"]["value"]
             safRef = data["strain_at_fracture"]["reference"]
-            safUnit = data["strain_at_fracture"]["units"]
             forces = data["raw_data"]["load"]
             elongations = data["raw_data"]["displacement"]
+
+            units = data["units"]
+            thickness_unit = LENGTH_UNITS.get(normalize_unit(units["thickness"]))
+            width_unit = LENGTH_UNITS.get(normalize_unit(units["width"]))
+            length_unit = LENGTH_UNITS.get(normalize_unit(units["elongation"]))
+            ym_unit = PRESSURE_UNITS.get(normalize_unit(ymUnit))
+            ys_unit = PRESSURE_UNITS.get(normalize_unit(ysUnit))
+            force_unit = FORCE_UNITS.get(normalize_unit(units["force"]))
+
+            if None in (thickness_unit, width_unit, length_unit, ym_unit, ys_unit, force_unit):
+                print(f"\nUnrecognized unit in file: {filename}. Skipping.")
+                continue
 
             #Make uris
             #Represents the experiment
@@ -294,7 +335,7 @@ for filename in os.listdir(input_dir):
             thicknessIRI_scalar_value = URIRef(experimentIRI + "_thickness_scalar_value_specification")
             g.add((thicknessIRI_scalar_value, RDF.type, OBO.OBI_0001931))  # is a scalar value specification
             g.add((thicknessIRI_scalar_value, PMD.PMD_0000006, Literal(thickness, datatype=XSD.float)))  # has value literal
-            g.add((thicknessIRI_scalar_value, OBO.IAO_0000039, QUDT.MilliM)) # has unit MilliM
+            g.add((thicknessIRI_scalar_value, OBO.IAO_0000039, thickness_unit)) # has unit from data
             g.add((thicknessIRI_quality, PMD.PMD_0000077, thicknessIRI_scalar_value))  # Quality of thickness specified by thickness scalar value specification
             g.add((thicknessIRI_scalar_value, OBO.IAO_0000136, testPieceIRI))  # is about test piece
 
@@ -308,7 +349,7 @@ for filename in os.listdir(input_dir):
             widthIRI_scalar_value = URIRef(experimentIRI + "_width_scalar_value_specification")
             g.add((widthIRI_scalar_value, RDF.type, OBO.OBI_0001931))  # is a scalar value specification
             g.add((widthIRI_scalar_value, PMD.PMD_0000006, Literal(width, datatype=XSD.float)))  # has value literal
-            g.add((widthIRI_scalar_value, OBO.IAO_0000039, QUDT.MilliM))  # has unit mm
+            g.add((widthIRI_scalar_value, OBO.IAO_0000039, width_unit))  # has unit from data
             g.add((widthIRI_quality, PMD.PMD_0000077, widthIRI_scalar_value))  # Quality of width specified by width scalar value specification
             g.add((widthIRI_scalar_value, OBO.IAO_0000136, testPieceIRI))  # is about test piece
 
@@ -322,7 +363,7 @@ for filename in os.listdir(input_dir):
             lengthIRI_scalar_value = URIRef(experimentIRI + "_gauge_length_scalar_value_specification")
             g.add((lengthIRI_scalar_value, RDF.type, OBO.OBI_0001931))  # is a scalar value specification
             g.add((lengthIRI_scalar_value, PMD.PMD_0000006,Literal(gauge_length, datatype=XSD.float)))  # has value literal
-            g.add((lengthIRI_scalar_value, OBO.IAO_0000039, QUDT.MilliM)) # has unit MilliM
+            g.add((lengthIRI_scalar_value, OBO.IAO_0000039, length_unit)) # has unit from data
             g.add((lengthIRI_quality, PMD.PMD_0000077, lengthIRI_scalar_value))  # Quality of length specified by length scalar value specification
             g.add((lengthIRI_scalar_value, OBO.IAO_0000136, testPieceIRI))  # is about test piece
 
@@ -336,7 +377,7 @@ for filename in os.listdir(input_dir):
             ymIRI_scalar_value = URIRef(experimentIRI + "_youngs_modulus_scalar_value_specification")
             g.add((ymIRI_scalar_value, RDF.type, OBO.OBI_0001931))  # is a scalar value specification
             g.add((ymIRI_scalar_value, PMD.PMD_0000006, Literal(ymVal, datatype=XSD.float)))  # has value literal
-            g.add((ymIRI_scalar_value, OBO.IAO_0000039, QUDT.MegaPa)) # has unit MegaPa
+            g.add((ymIRI_scalar_value, OBO.IAO_0000039, ym_unit)) # has unit from data
             g.add((ymIRI_quality, PMD.PMD_0000077,ymIRI_scalar_value))  # Quality of elastic modulus specified by elastic modulus value specification
             g.add((ymIRI_scalar_value, OBO.IAO_0000136, testPieceIRI))  # is about test piece
 
@@ -350,7 +391,7 @@ for filename in os.listdir(input_dir):
             ysIRI_scalar_value = URIRef(experimentIRI + "_yield_strength_scalar_value_specification")
             g.add((ysIRI_scalar_value, RDF.type, OBO.OBI_0001931))  # is a scalar value specification
             g.add((ysIRI_scalar_value, PMD.PMD_0000006, Literal(ysVal, datatype=XSD.float)))  # has value literal
-            g.add((ysIRI_scalar_value, OBO.IAO_0000039, QUDT.MegaPa)) # has unit MegaPa
+            g.add((ysIRI_scalar_value, OBO.IAO_0000039, ys_unit)) # has unit from data
             g.add((ysIRI_quality, PMD.PMD_0000077, ysIRI_scalar_value))  # Quality specified by value specification
             g.add((ysIRI_scalar_value, OBO.IAO_0000136, testPieceIRI))  # is about test piece
 
@@ -364,15 +405,16 @@ for filename in os.listdir(input_dir):
             safIRI_scalar_value = URIRef(experimentIRI + "_strain_at_fracture_value_specification")
             g.add((safIRI_scalar_value, RDF.type, OBO.OBI_0001931))  # is a scalar value specification
             g.add((safIRI_scalar_value, PMD.PMD_0000006, Literal(safVal, datatype=XSD.float)))  # has value literal
-            g.add((safIRI_scalar_value, OBO.IAO_0000039, Literal(safUnit)))  # has unit mm/mm
             g.add((safIRI_quality, PMD.PMD_0000077, safIRI_scalar_value))  # Quality specified by value specification
             g.add((safIRI_scalar_value, OBO.IAO_0000136, testPieceIRI))  # is about test piece
 
             #Create CSV files for each of the JSON input files to represent the Force and Elongation pairs
+            force_label = f"Force({units['force']})"
+            elongation_label = f"Elongation({units['elongation']})"
             csv_filename = os.path.join(output_dir_csv, process_id + "_data.csv")
             with open(csv_filename, mode="w", newline="") as f:
                 writer = csv.writer(f)
-                writer.writerow(["Force(N)", "Elongation(mm)"])  # header
+                writer.writerow([force_label, elongation_label])  # header
 
                 # zip() pairs the 1st force with the 1st elongation, then the 2nd, etc.
                 for f_val, e_val in zip(forces, elongations):
@@ -394,15 +436,15 @@ for filename in os.listdir(input_dir):
             forceColumnIRI = URIRef(experimentIRI + "_force_column")
             g.add((schemaIRI, CSVW.column, forceColumnIRI))
             g.add((forceColumnIRI, RDF.type, CSVW.Column)) #is a column
-            g.add((forceColumnIRI, CSVW.name, Literal("Force(N)")))
-            g.add((forceColumnIRI, OBO.IAO_0000039, QUDT.N)) #has unit N
+            g.add((forceColumnIRI, CSVW.name, Literal(force_label)))
+            g.add((forceColumnIRI, OBO.IAO_0000039, force_unit)) #has unit from data
             g.add((forceColumnIRI, CSVW.propertyUrl, PMD.PMD_0020200)) #Every value in the column corresponds to Force from PMD
             #Column 2: Elongation
             elongationColumnIRI = URIRef(experimentIRI + "_elongation_column")
             g.add((schemaIRI, CSVW.column, elongationColumnIRI))
             g.add((elongationColumnIRI, RDF.type, CSVW.Column))
-            g.add((elongationColumnIRI, CSVW.name, Literal("Elongation(mm)")))
-            g.add((elongationColumnIRI, OBO.IAO_0000039, QUDT.MilliM)) #has unit mm
+            g.add((elongationColumnIRI, CSVW.name, Literal(elongation_label)))
+            g.add((elongationColumnIRI, OBO.IAO_0000039, length_unit)) #has unit from data
             g.add((elongationColumnIRI, CSVW.propertyUrl, TTO.TTO_0000004)) #Every value in the column corresponds to elongation from TTO
             print("Annotation complete.")
 
