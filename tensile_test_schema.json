@@ -1,0 +1,88 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "sample": {"type": "string", "minLength": 1},
+        "date": {"type": "string", "format": "date"},
+        "material": {"type": "string"},
+        "units": {
+            "type": "object",
+            "properties": {
+                "width": {"type": "string"},
+                "thickness": {"type": "string"},
+                "length": {"type": "string"},
+                "elongation": {"type": "string"},
+                "force": {"type": "string"}
+            },
+            "required": ["width", "thickness", "length", "elongation", "force"]
+        },
+
+        "geometry": {
+            "type": "object",
+            "properties": {
+                "width": {"type": "number"},
+                "thickness": {"type": "number"},
+                "length": {"type": "number"}
+            },
+            "required": ["width", "thickness", "length"]
+        },
+
+        "youngs_modulus": {
+            "type": "object",
+            "properties": {
+                "value": {"type": "number"},
+                "reference": {"type": "string"},
+                "units": {"type": "string"}
+            },
+            "required": ["value", "units"]
+        },
+
+        "yield_strength": {
+            "type": "object",
+            "properties": {
+                "value": {"type": "number"},
+                "reference": {"type": "string"},
+                "units": {"type": "string"}
+            },
+            "required": ["value", "units"]
+        },
+
+        "strain_at_fracture": {
+            "type": "object",
+            "properties": {
+                "value": {"type": "number"},
+                "reference": {"type": "string"},
+                "units": {"type": "string"}
+            },
+            "required": ["value"]
+        },
+
+        "raw_data": {
+            "type": "object",
+            "properties": {
+                "force": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "minItems": 1
+                },
+                "elongation": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "minItems": 1
+                }
+            },
+            "required": ["force", "elongation"]
+        }
+    },
+
+    "required": [
+        "sample",
+        "material",
+        "units",
+        "geometry",
+        "youngs_modulus",
+        "yield_strength",
+        "strain_at_fracture",
+        "raw_data"
+    ]
+}
