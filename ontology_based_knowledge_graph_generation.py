@@ -52,7 +52,7 @@ from jsonschema import (
 )
 
 #This contains the Zenodo API URL, format in the form: https://zenodo.org/api/records/{RECORD_ID}
-api_url = "https://zenodo.org/api/records/19007867"
+api_url = "https://zenodo.org/api/records/23424130"
 
 #Once the data is downloaded, it will be stored in a directory. Name can be adjusted below.
 data_dir = "importedData"
@@ -121,95 +121,34 @@ os.makedirs(output_dir_jsonld, exist_ok=True)
 os.makedirs(output_dir_ttl, exist_ok=True)
 os.makedirs(output_dir_csv, exist_ok=True)
 
-#A JSON Schema Draft 07 helps describe the structure of JSON data. Used for validation of the input data.
-#Note that schema defines the structure the data must be in the format of.
-schema = {
-    "$schema": "http://json-schema.org/draft-07/schema#",
-    "type": "object",
-    "properties": {
-        "sample": {"type": "string", "minLength": 1},
-        "date": {"type": "string", "format": "date"},
-        "material": {"type": "string"},
-        "units": {
-            "type": "object",
-            "properties": {
-                "width": {"type": "string"},
-                "thickness": {"type": "string"},
-                "elongation": {"type": "string"},
-                "force": {"type": "string"}
-            },
-            "required": ["width", "thickness", "elongation", "force"]
-        },
-        "Geometry": {
-            "type": "object",
-            "properties": {
-                "width": {"type": "number"},
-                "thickness": {"type": "number"},
-                "gauge_length": {"type": "number"}
-            },
-            "required": ["width", "thickness", "gauge_length"]
-        },
+#The JSON Schema lives in its own file. If the repo was cloned, it is read from the local copy. If this script was copied on its own, the schema is downloaded from the repo instead.
+schema_filename = "tensile_test_schema.json"
+schema_url = "https://raw.githubusercontent.com/LaibahA/tensileTest_dataAnnotation/main/tensile_test_schema.json"
 
-        "youngs_modulus": {
-            "type": "object",
-            "properties": {
-                "value": {"type": "number"},
-                "reference": {"type": "string"},
-                "units": {"type": "string"}
-            },
-            "required": ["value", "reference", "units"]
-        },
+try:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+except NameError:
+    script_dir = os.getcwd()
 
-        "yield_strength": {
-            "type": "object",
-            "properties": {
-                "value": {"type": "number"},
-                "reference": {"type": "string"},
-                "units": {"type": "string"}
-            },
-            "required": ["value", "reference", "units"]
-        },
+#Check next to the script
+schema_path = os.path.join(script_dir, schema_filename)
 
-        "strain_at_fracture": {
-            "type": "object",
-            "properties": {
-                "value": {"type": "number"},
-                "reference": {"type": "string"},
-                "units": {"type": "string"}
-            },
-            "required": ["value", "reference", "units"]
-        },
-
-        "raw_data": {
-            "type": "object",
-            "properties": {
-                "load": {
-                    "type": "array",
-                    "items": {"type": "number"},
-                    "minItems": 1
-                },
-                "displacement": {
-                    "type": "array",
-                    "items": {"type": "number"},
-                    "minItems": 1
-                }
-            },
-            "required": ["load", "displacement"]
-        }
-    },
-
-    "required": [
-        "sample",
-        "material",
-        "units",
-        "Geometry",
-        "youngs_modulus",
-        "yield_strength",
-        "strain_at_fracture",
-        "raw_data"
-    ]
-}
-
+if os.path.exists(schema_path):
+    print(f"Using local schema: {schema_path}")
+    with open(schema_path) as sf:
+        schema = json.load(sf)
+else:
+    print(f"Local schema not found. Downloading from: {schema_url}")
+    try:
+        schema_response = requests.get(schema_url, timeout=30)
+        schema_response.raise_for_status()
+        schema = schema_response.json()
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(
+            f"Could not load '{schema_filename}' locally or download it from {schema_url}.\n"
+            f"Error: {e}"
+        )
+    
 #Empty graph to store triples
 g = Graph()
 
@@ -229,24 +168,22 @@ g.bind("obo", OBO)
 g.bind("csvw", CSVW)
 g.bind("dc", DC)
 
-#Maps the unit text found in the JSON to a QUDT unit. Keys must be lowercase.
-LENGTH_UNITS = {
+#Maps the unit text found in the JSON to a QUDT unit. Keys must match the unit text in the JSON exactly (case-sensitive).
+GEOMETRY_UNITS = {
     "mm": QUDT.MilliM,
     "cm": QUDT.CentiM,
     "m":  QUDT.M,
     "in": QUDT.IN,
 }
-PRESSURE_UNITS = {
-    "pa":  QUDT.PA,
-    "mpa": QUDT.MegaPA,
-    "gpa": QUDT.GigaPA,
+PROPERTY_UNITS = {
+    "Pa":  QUDT.PA,
+    "MPa": QUDT.MegaPA,
+    "GPa": QUDT.GigaPA,
 }
 FORCE_UNITS = {
-    "n" : QUDT.N
+    "N" : QUDT.N
 }
 
-def normalize_unit(unit_text):
-    return str(unit_text).strip().lower()
 
 #Define base namespace according to API URL. This allows us to create URIs (unique identifiers) for annotated entities.
 prefix = Namespace(api_url)
@@ -282,9 +219,9 @@ for filename in os.listdir(input_dir):
 
             #First, read in all the lines and save the variables.
             process_id = quote(data["sample"])
-            width = data["Geometry"]["width"]
-            thickness = data["Geometry"]["thickness"]
-            gauge_length = data["Geometry"]["gauge_length"]
+            width = data["geometry"]["width"]
+            thickness = data["geometry"]["thickness"]
+            length = data["geometry"]["length"]
             ymVal = data["youngs_modulus"]["value"]
             ymRef = data["youngs_modulus"]["reference"]
             ymUnit = data["youngs_modulus"]["units"]
@@ -293,18 +230,19 @@ for filename in os.listdir(input_dir):
             ysUnit = data["yield_strength"]["units"]
             safVal = data["strain_at_fracture"]["value"]
             safRef = data["strain_at_fracture"]["reference"]
-            forces = data["raw_data"]["load"]
-            elongations = data["raw_data"]["displacement"]
+            forces = data["raw_data"]["force"]
+            elongations = data["raw_data"]["elongation"]
 
             units = data["units"]
-            thickness_unit = LENGTH_UNITS.get(normalize_unit(units["thickness"]))
-            width_unit = LENGTH_UNITS.get(normalize_unit(units["width"]))
-            length_unit = LENGTH_UNITS.get(normalize_unit(units["elongation"]))
-            ym_unit = PRESSURE_UNITS.get(normalize_unit(ymUnit))
-            ys_unit = PRESSURE_UNITS.get(normalize_unit(ysUnit))
-            force_unit = FORCE_UNITS.get(normalize_unit(units["force"]))
+            thickness_unit = GEOMETRY_UNITS.get(units["thickness"])
+            width_unit = GEOMETRY_UNITS.get(units["width"])
+            length_unit = GEOMETRY_UNITS.get(units["length"])
+            ym_unit = PROPERTY_UNITS.get(ymUnit)
+            ys_unit = PROPERTY_UNITS.get(ysUnit)
+            elongation_unit = GEOMETRY_UNITS.get(units["elongation"])
+            force_unit = FORCE_UNITS.get(units["force"])
 
-            if None in (thickness_unit, width_unit, length_unit, ym_unit, ys_unit, force_unit):
+            if None in (thickness_unit, width_unit, length_unit, ym_unit, ys_unit, elongation_unit, force_unit):
                 print(f"\nUnrecognized unit in file: {filename}. Skipping.")
                 continue
 
@@ -360,7 +298,7 @@ for filename in os.listdir(input_dir):
             # Gauge length specification
             lengthIRI_scalar_value = URIRef(experimentIRI + "_gauge_length_scalar_value_specification")
             g.add((lengthIRI_scalar_value, RDF.type, OBO.OBI_0001931))  # is a scalar value specification
-            g.add((lengthIRI_scalar_value, PMD.PMD_0000006, Literal(gauge_length, datatype=XSD.float)))  # has value literal
+            g.add((lengthIRI_scalar_value, PMD.PMD_0000006, Literal(length, datatype=XSD.float)))  # has value literal
             g.add((lengthIRI_scalar_value, OBO.IAO_0000039, length_unit))  # has unit from data
             g.add((lengthIRI_quality, PMD.PMD_0000077, lengthIRI_scalar_value))  # Quality of length specified by length scalar value specification
             g.add((lengthIRI_scalar_value, OBO.IAO_0000136, testPieceIRI))  # is about test piece
@@ -423,7 +361,7 @@ for filename in os.listdir(input_dir):
             g.add((processIRI, OBO.RO_0002234, datasetIRI)) #processIRI has output dataset datasetIRI
             g.add((datasetIRI, RDF.type, CSVW.Table)) # is a table
             csv_name = process_id + "_data.csv"
-            g.add((datasetIRI, CSVW.url, URIRef(f"https://zenodo.org/records/19007867/files/{csv_name}")))
+            g.add((datasetIRI, CSVW.url, URIRef(f"https://zenodo.org/records/23424130/files/{csv_name}")))
             g.add((datasetIRI, RDF.type, OBO.IAO_0000109)) # is a measurement datum
             g.add((datasetIRI, DC.title, Literal(process_id + " Force Elongation Curve", datatype=XSD.string)))
             #Define a CSVW table schema describing the columns.
@@ -442,7 +380,7 @@ for filename in os.listdir(input_dir):
             g.add((schemaIRI, CSVW.column, elongationColumnIRI))
             g.add((elongationColumnIRI, RDF.type, CSVW.Column))
             g.add((elongationColumnIRI, CSVW.name, Literal(elongation_label)))
-            g.add((elongationColumnIRI, OBO.IAO_0000039, length_unit))  # has unit from data
+            g.add((elongationColumnIRI, OBO.IAO_0000039, elongation_unit))  # has unit from data
             g.add((elongationColumnIRI, CSVW.propertyUrl, TTO.TTO_0000004))  # Every value in the column corresponds to elongation from TTO
             print("Annotation complete.")
 
