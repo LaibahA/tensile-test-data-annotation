@@ -1,9 +1,8 @@
 #Acknowledgment
 #This work is based on the tensile testing ontology and annotation script developed by Markus Schilling (BAM, Germany).
-#This is a standalone script, it does not require any files to already be downloaded locally, and will extract data from https://zenodo.org/api/records/19007867/files/TensileTestProject.zip/content
+#This is a standalone script, it does not require any files to already be downloaded locally, and will extract data from https://zenodo.org/api/records/23424130/files/TensileTestProject.zip/content
 
 #Imports
-import csv
 import os
 import json
 import zipfile
@@ -53,6 +52,10 @@ from jsonschema import (
 
 #This contains the Zenodo API URL, format in the form: https://zenodo.org/api/records/{RECORD_ID}
 api_url = "https://zenodo.org/api/records/23424130"
+
+record_id = api_url.rstrip("/").split("/")[-1] #String handling, just take the record from the right end of the api_url.
+zenodo_zip_name = "TensileTestProject.zip" #Name of the zip file on the Zenodo record
+zenodo_json_folder = "TensileTestProject/data/dataClass2025/jsonFiles" #Folder inside the zip that holds the JSON files.
 
 #Once the data is downloaded, it will be stored in a directory. Name can be adjusted below.
 data_dir = "importedData"
@@ -113,13 +116,11 @@ for root, dirs, files in os.walk(data_dir):
 if input_dir is None:
     raise FileNotFoundError("Could not find 'jsonFiles' directory after extraction.")
 
-#Output directory names for the annotated jsonld, ttl, and csv files. If they don't exist, this will create them.
+#Output directory names for the annotated jsonld and ttl files. If they don't exist, this will create them.
 output_dir_jsonld = "annotatedOutputs/annotated_metals_jsonld"
 output_dir_ttl = "annotatedOutputs/annotated_metals_ttl"
-output_dir_csv = "annotatedOutputs/metals_csv_data"
 os.makedirs(output_dir_jsonld, exist_ok=True)
 os.makedirs(output_dir_ttl, exist_ok=True)
-os.makedirs(output_dir_csv, exist_ok=True)
 
 #The JSON Schema lives in its own file. If the repo was cloned, it is read from the local copy. If this script was copied on its own, the schema is downloaded from the repo instead.
 schema_filename = "tensile_test_schema.json"
@@ -157,7 +158,6 @@ TTO = Namespace("https://materialdigital.github.io/application-ontologies/tto/#/
 PMD = Namespace("https://materialdigital.github.io/core-ontology/") #Core terms for materials science and engineering
 QUDT = Namespace("http://qudt.org/vocab/unit/") #Measurment units
 OBO = Namespace("http://purl.obolibrary.org/obo/") #Reusable scientific vocabulary terms
-CSVW = Namespace("http://www.w3.org/ns/csvw#") #CSV metadata terms
 DC = Namespace("http://purl.org/dc/terms/") #Metadata such as title, date, etc
 
 #Bind namespace prefixes to the graph. This makes our RDF output more readable.
@@ -165,7 +165,6 @@ g.bind("tto", TTO)
 g.bind("pmd", PMD)
 g.bind("qudt", QUDT)
 g.bind("obo", OBO)
-g.bind("csvw", CSVW)
 g.bind("dc", DC)
 
 #Maps the unit text found in the JSON to a QUDT unit. Keys must match the unit text in the JSON exactly (case-sensitive).
@@ -186,19 +185,19 @@ FORCE_UNITS = {
 
 
 #Define base namespace according to API URL. This allows us to create URIs (unique identifiers) for annotated entities.
-prefix = Namespace(api_url)
+prefix = Namespace(api_url + "/")
 g.bind("prefix", prefix)
 
-#Create an ontology entity, and import ontologies vocabulary so we can them it to annotate tensile testing data.
+#Create an ontology entity, and import ontologies vocabulary so we can use them to annotate tensile testing data.
 onto = URIRef(prefix) #We need to create an ontology entity to enforce that our RDF file is an ontology based dataset.
 g.add((onto, RDF.type, OWL.Ontology))
-for ns in [TTO, PMD, QUDT, OBO, CSVW, DC]:
+for ns in [TTO, PMD, QUDT, OBO, DC]:
     g.add((onto, OWL.imports, URIRef(ns)))
 
 #Adding metadata to describe the ontology entity.
 g.add((onto, DC.title, Literal("Tensile Test Ontology (TTO) A-Box Data Mapping Example", datatype=XSD.string)))
 g.add((onto, OWL.versionInfo, Literal("3.0.0", datatype=XSD.string)))
-g.add((onto, DC.description, Literal("This is an exemplary A-Box (instance data) representing tensile test results performed on an metal samples according to ISO 6892-1:2019-11. The data originates from a publicly available dataset hosted on Zenodo: https://zenodo.org/records/19007867. The semantic structure is based on the Tensile Test Ontology (TTO) version 3.0 (https://github.com/materialdigital/tensile-test-ontology), complemented primarily by concepts from the PMD Core Ontology (PMDco).", datatype=XSD.string)))
+g.add((onto, DC.description, Literal("This is an exemplary A-Box (instance data) representing tensile test results performed on metal samples according to ISO 6892-1:2019-11. The data originates from a publicly available dataset hosted on Zenodo: https://zenodo.org/records/23424130. The semantic structure is based on the Tensile Test Ontology (TTO) version 3.0 (https://github.com/materialdigital/tensile-test-ontology), complemented primarily by concepts from the PMD Core Ontology (PMDco).", datatype=XSD.string)))
 
 #Loop through each JSON file in the input directory
 for filename in os.listdir(input_dir):
@@ -230,8 +229,6 @@ for filename in os.listdir(input_dir):
             ysUnit = data["yield_strength"]["units"]
             safVal = data["strain_at_fracture"]["value"]
             safRef = data["strain_at_fracture"]["reference"]
-            forces = data["raw_data"]["force"]
-            elongations = data["raw_data"]["elongation"]
 
             units = data["units"]
             thickness_unit = GEOMETRY_UNITS.get(units["thickness"])
@@ -344,44 +341,42 @@ for filename in os.listdir(input_dir):
             g.add((safIRI_quality, PMD.PMD_0000077, safIRI_scalar_value))  # Quality specified by value specification
             g.add((safIRI_scalar_value, OBO.IAO_0000136, testPieceIRI))  # is about test piece
 
-            #Create CSV files for each of the JSON input files to represent the Force and Elongation pairs
+            #These labels describe the Force and Elongation pair data that stays in the Zenodo JSON file.
             force_label = f"Force({units['force']})"
             elongation_label = f"Elongation({units['elongation']})"
-            csv_filename = os.path.join(output_dir_csv, process_id + "_data.csv")
-            with open(csv_filename, mode="w", newline="") as f:
-                writer = csv.writer(f)
-                writer.writerow([force_label, elongation_label])    # header
-
-                # zip() pairs the 1st force with the 1st elongation, then the 2nd, etc.
-                for f_val, e_val in zip(forces, elongations):
-                    writer.writerow([f_val, e_val])
 
             #Represents the dataset
             datasetIRI = URIRef(experimentIRI + "_dataset")
             g.add((processIRI, OBO.RO_0002234, datasetIRI)) #processIRI has output dataset datasetIRI
-            g.add((datasetIRI, RDF.type, CSVW.Table)) # is a table
-            csv_name = process_id + "_data.csv"
-            g.add((datasetIRI, CSVW.url, URIRef(f"https://zenodo.org/records/23424130/files/{csv_name}")))
-            g.add((datasetIRI, RDF.type, OBO.IAO_0000109)) # is a measurement datum
-            g.add((datasetIRI, DC.title, Literal(process_id + " Force Elongation Curve", datatype=XSD.string)))
-            #Define a CSVW table schema describing the columns.
-            schemaIRI = URIRef(experimentIRI + "_table_schema")
-            g.add((datasetIRI, CSVW.tableSchema, schemaIRI))
-            g.add((schemaIRI, RDF.type, CSVW.Schema))
-            # Column 1: Force
-            forceColumnIRI = URIRef(experimentIRI + "_force_column")
-            g.add((schemaIRI, CSVW.column, forceColumnIRI))
-            g.add((forceColumnIRI, RDF.type, CSVW.Column))  # is a column
-            g.add((forceColumnIRI, CSVW.name, Literal(force_label)))
-            g.add((forceColumnIRI, OBO.IAO_0000039, force_unit))  # has unit from data
-            g.add((forceColumnIRI, CSVW.propertyUrl, PMD.PMD_0020200))  # Every value in the column corresponds to Force from PMD
-            # Column 2: Elongation
-            elongationColumnIRI = URIRef(experimentIRI + "_elongation_column")
-            g.add((schemaIRI, CSVW.column, elongationColumnIRI))
-            g.add((elongationColumnIRI, RDF.type, CSVW.Column))
-            g.add((elongationColumnIRI, CSVW.name, Literal(elongation_label)))
-            g.add((elongationColumnIRI, OBO.IAO_0000039, elongation_unit))  # has unit from data
-            g.add((elongationColumnIRI, CSVW.propertyUrl, TTO.TTO_0000004))  # Every value in the column corresponds to elongation from TTO
+            g.add((datasetIRI, RDF.type, OBO.IAO_0000100)) # is a data set (the paired force and elongation values of this test)
+            g.add((datasetIRI, RDF.type, OBO.IAO_0000109))  # is a measurement datum
+            g.add((datasetIRI, DC.title, Literal(data["sample"] + " Force Elongation Curve", datatype=XSD.string)))
+            g.add((datasetIRI, DC.description, Literal("Force and elongation values from one tensile test. They were recorded together: the i-th force value goes with the i-th elongation value.")))
+            zenodo_path = f"{zenodo_json_folder}/{filename}"
+            zenodo_file_url = URIRef(f"https://zenodo.org/records/{record_id}/files/{zenodo_zip_name}#{quote(zenodo_path)}") #Link to the specific file inside the Zenodo zip that contains this dataset.
+            g.add((datasetIRI, DC.source, zenodo_file_url))  # the data set comes from this file
+
+            #We want to represent the force and elongation values as two datasets that are part of the main dataset of force elongation pair values.
+            # Part 1: Force
+            forceSeriesIRI = URIRef(experimentIRI + "_force_series")
+            g.add((datasetIRI, OBO.BFO_0000051, forceSeriesIRI))  # data set has part force series
+            g.add((forceSeriesIRI, RDF.type, OBO.IAO_0000100))  # is a data set (all the force values)
+            g.add((forceSeriesIRI, DC.title, Literal(force_label)))  # name
+            g.add((forceSeriesIRI, OBO.IAO_0000039, force_unit))  # has unit from data
+            g.add((forceSeriesIRI, OBO.IAO_0000136, PMD.PMD_0020200))  # is about Force from PMD (points to the class)
+            g.add((forceSeriesIRI, DC.source, zenodo_file_url))  # comes from this file
+            g.add((forceSeriesIRI, DC.description, Literal("Stored at raw_data.force in the file")))  # where in the file
+
+            # Part 2: Elongation
+            elongationSeriesIRI = URIRef(experimentIRI + "_elongation_series")
+            g.add((datasetIRI, OBO.BFO_0000051, elongationSeriesIRI))  # data set has part elongation series
+            g.add((elongationSeriesIRI, RDF.type, OBO.IAO_0000100))  # is a data set (all the elongation values)
+            g.add((elongationSeriesIRI, DC.title, Literal(elongation_label)))  # name
+            g.add((elongationSeriesIRI, OBO.IAO_0000039, elongation_unit))  # has unit from data
+            g.add((elongationSeriesIRI, OBO.IAO_0000136, TTO.TTO_0000004))  # is about elongation from TTO (points to the class)
+            g.add((elongationSeriesIRI, DC.source, zenodo_file_url))  # comes from this file
+            g.add((elongationSeriesIRI, DC.description, Literal("Stored at raw_data.elongation in the file")))  # where in the file
+
             print("Annotation complete.")
 
 #Serializing in jsonld and ttl
