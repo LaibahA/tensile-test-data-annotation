@@ -1,9 +1,9 @@
 #Acknowledgment
 #This work is based on the tensile testing ontology and annotation script developed by Markus Schilling (BAM, Germany).
-#This is a standalone script, it does not require any files to already be downloaded locally, and will extract data from https://zenodo.org/api/records/19007867/files/TensileTestProject.zip/content
+#This is the demo version of the script. It uses the sample JSON files already included in the demo folder (importedData/jsonFiles), so no manual download is needed. Each annotated data set links to its sample file in this repo.
+#If the sample files are not found locally, the script will download the full dataset from https://zenodo.org/api/records/23424130/files/TensileTestProject.zip/content
 
 #Imports
-import csv
 import os
 import json
 import zipfile
@@ -53,6 +53,9 @@ from jsonschema import (
 
 #This contains the Zenodo API URL, format in the form: https://zenodo.org/api/records/{RECORD_ID}
 api_url = "https://zenodo.org/api/records/23424130"
+
+#Base link to the sample JSON files that are already uploaded in this repo. Each data set links to its own file here.
+repo_file_base = "https://raw.githubusercontent.com/LaibahA/tensileTest_dataAnnotation/main/demo/importedData/jsonFiles"
 
 #Once the data is downloaded, it will be stored in a directory. Name can be adjusted below.
 data_dir = "importedData"
@@ -113,13 +116,11 @@ for root, dirs, files in os.walk(data_dir):
 if input_dir is None:
     raise FileNotFoundError("Could not find 'jsonFiles' directory after extraction.")
 
-#Output directory names for the annotated jsonld, ttl, and csv files. If they don't exist, this will create them.
+#Output directory names for the annotated jsonld and ttl files. If they don't exist, this will create them.
 output_dir_jsonld = "annotatedOutputs/annotated_metals_jsonld"
 output_dir_ttl = "annotatedOutputs/annotated_metals_ttl"
-output_dir_csv = "annotatedOutputs/metals_csv_data"
 os.makedirs(output_dir_jsonld, exist_ok=True)
 os.makedirs(output_dir_ttl, exist_ok=True)
-os.makedirs(output_dir_csv, exist_ok=True)
 
 #The JSON Schema lives in its own file. If the repo was cloned, it is read from the local copy. If this script was copied on its own, the schema is downloaded from the repo instead.
 schema_filename = "tensile_test_schema.json"
@@ -159,9 +160,8 @@ g = Graph()
 #Define ontology namespaces. This helps us access and reference them throughout the script.
 TTO = Namespace("https://materialdigital.github.io/application-ontologies/tto/#/")  #Tensile testing ontology terms
 PMD = Namespace("https://materialdigital.github.io/core-ontology/") #Core terms for materials science and engineering
-QUDT = Namespace("http://qudt.org/vocab/unit/") #Measurment units
+QUDT = Namespace("http://qudt.org/vocab/unit/") #Measurement units
 OBO = Namespace("http://purl.obolibrary.org/obo/") #Reusable scientific vocabulary terms
-CSVW = Namespace("http://www.w3.org/ns/csvw#") #CSV metadata terms
 DC = Namespace("http://purl.org/dc/terms/") #Metadata such as title, date, etc
 
 #Bind namespace prefixes to the graph. This makes our RDF output more readable.
@@ -169,7 +169,6 @@ g.bind("tto", TTO)
 g.bind("pmd", PMD)
 g.bind("qudt", QUDT)
 g.bind("obo", OBO)
-g.bind("csvw", CSVW)
 g.bind("dc", DC)
 
 #Maps the unit text found in the JSON to a QUDT unit. Keys must match the unit text in the JSON exactly (case-sensitive).
@@ -188,24 +187,24 @@ FORCE_UNITS = {
     "N" : QUDT.N
 }
 
+
 #Define base namespace according to API URL. This allows us to create URIs (unique identifiers) for annotated entities.
-prefix = Namespace(api_url)
+prefix = Namespace(api_url + "/")
 g.bind("prefix", prefix)
 
-#Create an ontology entity, and import ontologies vocabulary so we can them it to annotate tensile testing data.
+#Create an ontology entity, and import ontologies vocabulary so we can use them to annotate tensile testing data.
 onto = URIRef(prefix) #We need to create an ontology entity to enforce that our RDF file is an ontology based dataset.
 g.add((onto, RDF.type, OWL.Ontology))
-for ns in [TTO, PMD, QUDT, OBO, CSVW, DC]:
+for ns in [TTO, PMD, QUDT, OBO, DC]:
     g.add((onto, OWL.imports, URIRef(ns)))
 
 #Adding metadata to describe the ontology entity.
 g.add((onto, DC.title, Literal("Tensile Test Ontology (TTO) A-Box Data Mapping Example", datatype=XSD.string)))
 g.add((onto, OWL.versionInfo, Literal("3.0.0", datatype=XSD.string)))
-g.add((onto, DC.description, Literal("This is an exemplary A-Box (instance data) representing tensile test results performed on an metal samples according to ISO 6892-1:2019-11. The data originates from a publicly available dataset hosted on Zenodo: https://zenodo.org/records/19007867. The semantic structure is based on the Tensile Test Ontology (TTO) version 3.0 (https://github.com/materialdigital/tensile-test-ontology), complemented primarily by concepts from the PMD Core Ontology (PMDco).", datatype=XSD.string)))
+g.add((onto, DC.description, Literal("This is an exemplary A-Box (instance data) representing tensile test results performed on metal samples according to ISO 6892-1:2019-11. The data originates from a publicly available dataset hosted on Zenodo: https://zenodo.org/records/23424130. The semantic structure is based on the Tensile Test Ontology (TTO) version 3.0 (https://github.com/materialdigital/tensile-test-ontology), complemented primarily by concepts from the PMD Core Ontology (PMDco).", datatype=XSD.string)))
 
 #Loop through each JSON file in the input directory
 for filename in os.listdir(input_dir):
-
     print(f"Beginning JSON validation and annotation for file: {filename}.")
     if filename.endswith(".json"):
         filepath = os.path.join(input_dir, filename)
@@ -223,7 +222,6 @@ for filename in os.listdir(input_dir):
 
             #First, read in all the lines and save the variables.
             process_id = quote(data["sample"])
-            material = data["material"]
             width = data["geometry"]["width"]
             thickness = data["geometry"]["thickness"]
             length = data["geometry"]["length"]
@@ -235,8 +233,6 @@ for filename in os.listdir(input_dir):
             ysUnit = data["yield_strength"]["units"]
             safVal = data["strain_at_fracture"]["value"]
             safRef = data["strain_at_fracture"]["reference"]
-            forces = data["raw_data"]["force"]
-            elongations = data["raw_data"]["elongation"]
 
             units = data["units"]
             thickness_unit = GEOMETRY_UNITS.get(units["thickness"])
@@ -247,41 +243,41 @@ for filename in os.listdir(input_dir):
             elongation_unit = GEOMETRY_UNITS.get(units["elongation"])
             force_unit = FORCE_UNITS.get(units["force"])
 
-            if None in (thickness_unit, width_unit, length_unit, ym_unit, ys_unit, force_unit, elongation_unit):
+            if None in (thickness_unit, width_unit, length_unit, ym_unit, ys_unit, elongation_unit, force_unit):
                 print(f"\nUnrecognized unit in file: {filename}. Skipping.")
                 continue
 
-            #Make uris
-            #Represents the experiment
+            # Make uris
+            # Represents the experiment
             experimentIRI = URIRef(prefix + process_id)
-            g.add((experimentIRI, RDF.type, OBO.IAO_0020000)) #ExperimentIRI is an identifier
+            g.add((experimentIRI, RDF.type, OBO.IAO_0020000))  # ExperimentIRI is an identifier
 
-            #Represents the process
+            # Represents the process
             processIRI = URIRef(experimentIRI + "_process")
-            g.add((processIRI, RDF.type, PMD.PMD_0000974)) #ProcessIRI is a tensile testing process
+            g.add((processIRI, RDF.type, PMD.PMD_0000974))  # ProcessIRI is a tensile testing process
             g.add((experimentIRI, OBO.IAO_0000219, processIRI))  # ExperimentIRI denotes tensile testing process
 
-            #Represents the test piece
+            # Represents the test piece
             testPieceIRI = URIRef(experimentIRI + "_test_piece")
-            g.add((testPieceIRI, RDF.type, PMD.PMD_0000975)) #is of test piece role
-            g.add((processIRI, PMD.OBI_0000293, testPieceIRI)) #ProcessIRI has specified input test piece
+            g.add((testPieceIRI, RDF.type, PMD.PMD_0000975))  # is of test piece role
+            g.add((processIRI, PMD.OBI_0000293, testPieceIRI))  # ProcessIRI has specified input test piece
 
-            #Maps to Original Thickness from TTO
-            #Thickness quality
+            # Maps to Original Thickness from TTO
+            # Thickness quality
             thicknessIRI_quality = URIRef(experimentIRI + "_thickness_quality")
             g.add((thicknessIRI_quality, RDF.type, TTO.TTO_0000029))  # is original thickness
             g.add((processIRI, OBO.RO_0002234, thicknessIRI_quality))  # processIRI has output thickness
             g.add((testPieceIRI, PMD.PMD_0025998, thicknessIRI_quality))  # Test piece has relational quality thickness
-            #Thickness specification
+            # Thickness specification
             thicknessIRI_scalar_value = URIRef(experimentIRI + "_thickness_scalar_value_specification")
             g.add((thicknessIRI_scalar_value, RDF.type, OBO.OBI_0001931))  # is a scalar value specification
             g.add((thicknessIRI_scalar_value, PMD.PMD_0000006, Literal(thickness, datatype=XSD.float)))  # has value literal
-            g.add((thicknessIRI_scalar_value, OBO.IAO_0000039, thickness_unit)) # has unit from data
+            g.add((thicknessIRI_scalar_value, OBO.IAO_0000039, thickness_unit))  # has unit from data
             g.add((thicknessIRI_quality, PMD.PMD_0000077, thicknessIRI_scalar_value))  # Quality of thickness specified by thickness scalar value specification
             g.add((thicknessIRI_scalar_value, OBO.IAO_0000136, testPieceIRI))  # is about test piece
 
-            #Maps to Original Width from TTO
-            #Width quality
+            # Maps to Original Width from TTO
+            # Width quality
             widthIRI_quality = URIRef(experimentIRI + "_width_quality")
             g.add((widthIRI_quality, RDF.type, TTO.TTO_0000030))  # is original width
             g.add((processIRI, OBO.RO_0002234, widthIRI_quality))  # processIRI has output width
@@ -294,99 +290,96 @@ for filename in os.listdir(input_dir):
             g.add((widthIRI_quality, PMD.PMD_0000077, widthIRI_scalar_value))  # Quality of width specified by width scalar value specification
             g.add((widthIRI_scalar_value, OBO.IAO_0000136, testPieceIRI))  # is about test piece
 
-            #Maps to Original Gauge Length from TTO
-            #Gauge length quality
+            # Maps to Original Gauge Length from TTO
+            # Gauge length quality
             lengthIRI_quality = URIRef(experimentIRI + "_gauge_length_quality")
             g.add((lengthIRI_quality, RDF.type, TTO.TTO_0000020))  # is an original gauge length
             g.add((processIRI, OBO.RO_0002234, lengthIRI_quality))  # processIRI has output quality length
             g.add((testPieceIRI, PMD.PMD_0025998, lengthIRI_quality))  # Test piece has relational quality gauge length
-            #Gauge length specification
+            # Gauge length specification
             lengthIRI_scalar_value = URIRef(experimentIRI + "_gauge_length_scalar_value_specification")
             g.add((lengthIRI_scalar_value, RDF.type, OBO.OBI_0001931))  # is a scalar value specification
-            g.add((lengthIRI_scalar_value, PMD.PMD_0000006,Literal(length, datatype=XSD.float)))  # has value literal
-            g.add((lengthIRI_scalar_value, OBO.IAO_0000039, length_unit)) # has unit from data
+            g.add((lengthIRI_scalar_value, PMD.PMD_0000006, Literal(length, datatype=XSD.float)))  # has value literal
+            g.add((lengthIRI_scalar_value, OBO.IAO_0000039, length_unit))  # has unit from data
             g.add((lengthIRI_quality, PMD.PMD_0000077, lengthIRI_scalar_value))  # Quality of length specified by length scalar value specification
             g.add((lengthIRI_scalar_value, OBO.IAO_0000136, testPieceIRI))  # is about test piece
 
-            #Maps to Elastic Modulus from PMD
-            #Elastic modulus quality
+            # Maps to Elastic Modulus from PMD
+            # Elastic modulus quality
             ymIRI_quality = URIRef(experimentIRI + "_youngs_modulus_quality")
             g.add((ymIRI_quality, RDF.type, PMD.PMD_0000618))  # is an elastic modulus
             g.add((processIRI, OBO.RO_0002234, ymIRI_quality))  # processIRI has output elastic modulus
             g.add((testPieceIRI, PMD.PMD_0025998, ymIRI_quality))  # Test piece has relational quality elastic modulus
-            #Elastic modulus specification
+            # Elastic modulus specification
             ymIRI_scalar_value = URIRef(experimentIRI + "_youngs_modulus_scalar_value_specification")
             g.add((ymIRI_scalar_value, RDF.type, OBO.OBI_0001931))  # is a scalar value specification
             g.add((ymIRI_scalar_value, PMD.PMD_0000006, Literal(ymVal, datatype=XSD.float)))  # has value literal
-            g.add((ymIRI_scalar_value, OBO.IAO_0000039, ym_unit)) # has unit from data
+            g.add((ymIRI_scalar_value, OBO.IAO_0000039, ym_unit))  # has unit from data
             g.add((ymIRI_quality, PMD.PMD_0000077,ymIRI_scalar_value))  # Quality of elastic modulus specified by elastic modulus value specification
             g.add((ymIRI_scalar_value, OBO.IAO_0000136, testPieceIRI))  # is about test piece
 
-            #Maps to Force at proof strength plastic extension f02 from TTO
-            #Force at proof strength plastic extension f02 quality
+            # Maps to Force at proof strength plastic extension f02 from TTO
+            # Force at proof strength plastic extension f02 quality
             ysIRI_quality = URIRef(experimentIRI + "_yield_strength_quality")
             g.add((ysIRI_quality, RDF.type, TTO.TTO_0000042))  # is a Force at proof strength plastic extension f02
             g.add((processIRI, OBO.RO_0002234, ysIRI_quality))  # processIRI has output Force at proof strength plastic extension f02
             g.add((testPieceIRI, PMD.PMD_0025998, ysIRI_quality))  # Test piece has relational quality Force at proof strength plastic extension f02
-            #Force at proof strength plastic extension f02 specification
+            # Force at proof strength plastic extension f02 specification
             ysIRI_scalar_value = URIRef(experimentIRI + "_yield_strength_scalar_value_specification")
             g.add((ysIRI_scalar_value, RDF.type, OBO.OBI_0001931))  # is a scalar value specification
             g.add((ysIRI_scalar_value, PMD.PMD_0000006, Literal(ysVal, datatype=XSD.float)))  # has value literal
-            g.add((ysIRI_scalar_value, OBO.IAO_0000039, ys_unit)) # has unit from data
+            g.add((ysIRI_scalar_value, OBO.IAO_0000039, ys_unit))  # has unit from data
             g.add((ysIRI_quality, PMD.PMD_0000077, ysIRI_scalar_value))  # Quality specified by value specification
             g.add((ysIRI_scalar_value, OBO.IAO_0000136, testPieceIRI))  # is about test piece
 
-            #Maps to Percentage Total Extension at Fracture from TTO
-            #Strain at fracture quality
+            # Maps to Percentage Total Extension at Fracture from TTO
+            # Strain at fracture quality
             safIRI_quality = URIRef(experimentIRI + "_strain_at_fracture_quality")
             g.add((safIRI_quality, RDF.type, TTO.TTO_0000039))  # is a PercentageTotalExtensionAtFracture
             g.add((processIRI, OBO.RO_0002234, safIRI_quality))  # processIRI has output percentage total extension at fracture
             g.add((testPieceIRI, PMD.PMD_0025998, safIRI_quality))  # Test piece has relational quality strain at fracture
-            #Strain at fracture specification
+            # Strain at fracture specification
             safIRI_scalar_value = URIRef(experimentIRI + "_strain_at_fracture_value_specification")
             g.add((safIRI_scalar_value, RDF.type, OBO.OBI_0001931))  # is a scalar value specification
             g.add((safIRI_scalar_value, PMD.PMD_0000006, Literal(safVal, datatype=XSD.float)))  # has value literal
             g.add((safIRI_quality, PMD.PMD_0000077, safIRI_scalar_value))  # Quality specified by value specification
             g.add((safIRI_scalar_value, OBO.IAO_0000136, testPieceIRI))  # is about test piece
 
-            #Create CSV files for each of the JSON input files to represent the Force and Elongation pairs
+            #These labels describe the Force and Elongation pair data that stays in the JSON file.
             force_label = f"Force({units['force']})"
             elongation_label = f"Elongation({units['elongation']})"
-            csv_filename = os.path.join(output_dir_csv, process_id + "_data.csv")
-            with open(csv_filename, mode="w", newline="") as f:
-                writer = csv.writer(f)
-                writer.writerow([force_label, elongation_label])  # header
-
-                # zip() pairs the 1st force with the 1st elongation, then the 2nd, etc.
-                for f_val, e_val in zip(forces, elongations):
-                    writer.writerow([f_val, e_val])
 
             #Represents the dataset
             datasetIRI = URIRef(experimentIRI + "_dataset")
             g.add((processIRI, OBO.RO_0002234, datasetIRI)) #processIRI has output dataset datasetIRI
-            g.add((datasetIRI, RDF.type, CSVW.Table)) # is a table
-            csv_name = process_id + "_data.csv"
-            g.add((datasetIRI, CSVW.url, URIRef(f"https://zenodo.org/records/23424130/files/{csv_name}")))
-            g.add((datasetIRI, RDF.type, OBO.IAO_0000109)) # is a measurement datum
-            g.add((datasetIRI, DC.title, Literal(process_id + " Force Elongation Curve", datatype=XSD.string)))
-            #Define a CSVW table schema describing the columns.
-            schemaIRI = URIRef(experimentIRI + "_table_schema")
-            g.add((datasetIRI, CSVW.tableSchema, schemaIRI))
-            g.add((schemaIRI, RDF.type, CSVW.Schema))
-            #Column 1: Force
-            forceColumnIRI = URIRef(experimentIRI + "_force_column")
-            g.add((schemaIRI, CSVW.column, forceColumnIRI))
-            g.add((forceColumnIRI, RDF.type, CSVW.Column)) #is a column
-            g.add((forceColumnIRI, CSVW.name, Literal(force_label)))
-            g.add((forceColumnIRI, OBO.IAO_0000039, force_unit)) #has unit from data
-            g.add((forceColumnIRI, CSVW.propertyUrl, PMD.PMD_0020200)) #Every value in the column corresponds to Force from PMD
-            #Column 2: Elongation
-            elongationColumnIRI = URIRef(experimentIRI + "_elongation_column")
-            g.add((schemaIRI, CSVW.column, elongationColumnIRI))
-            g.add((elongationColumnIRI, RDF.type, CSVW.Column))
-            g.add((elongationColumnIRI, CSVW.name, Literal(elongation_label)))
-            g.add((elongationColumnIRI, OBO.IAO_0000039, elongation_unit)) #has unit from data
-            g.add((elongationColumnIRI, CSVW.propertyUrl, TTO.TTO_0000004)) #Every value in the column corresponds to elongation from TTO
+            g.add((datasetIRI, RDF.type, OBO.IAO_0000100)) # is a data set (the paired force and elongation values of this test)
+            g.add((datasetIRI, RDF.type, OBO.IAO_0000109))  # is a measurement datum
+            g.add((datasetIRI, DC.title, Literal(data["sample"] + " Force Elongation Curve", datatype=XSD.string)))
+            g.add((datasetIRI, DC.description, Literal("Force and elongation values from one tensile test. They were recorded together: the i-th force value goes with the i-th elongation value.")))
+            source_file_url = URIRef(f"{repo_file_base}/{quote(filename)}") #Link to the specific sample file in this repo that contains this dataset.
+            g.add((datasetIRI, DC.source, source_file_url))  # the data set comes from this file
+
+            #We want to represent the force and elongation values as two datasets that are part of the main dataset of force elongation pair values.
+            # Part 1: Force
+            forceSeriesIRI = URIRef(experimentIRI + "_force_series")
+            g.add((datasetIRI, OBO.BFO_0000051, forceSeriesIRI))  # data set has part force series
+            g.add((forceSeriesIRI, RDF.type, OBO.IAO_0000100))  # is a data set (all the force values)
+            g.add((forceSeriesIRI, DC.title, Literal(force_label)))  # name
+            g.add((forceSeriesIRI, OBO.IAO_0000039, force_unit))  # has unit from data
+            g.add((forceSeriesIRI, OBO.IAO_0000136, PMD.PMD_0020200))  # is about Force from PMD (points to the class)
+            g.add((forceSeriesIRI, DC.source, source_file_url))  # comes from this file
+            g.add((forceSeriesIRI, DC.description, Literal("Stored at raw_data.force in the file")))  # where in the file
+
+            # Part 2: Elongation
+            elongationSeriesIRI = URIRef(experimentIRI + "_elongation_series")
+            g.add((datasetIRI, OBO.BFO_0000051, elongationSeriesIRI))  # data set has part elongation series
+            g.add((elongationSeriesIRI, RDF.type, OBO.IAO_0000100))  # is a data set (all the elongation values)
+            g.add((elongationSeriesIRI, DC.title, Literal(elongation_label)))  # name
+            g.add((elongationSeriesIRI, OBO.IAO_0000039, elongation_unit))  # has unit from data
+            g.add((elongationSeriesIRI, OBO.IAO_0000136, TTO.TTO_0000004))  # is about elongation from TTO (points to the class)
+            g.add((elongationSeriesIRI, DC.source, source_file_url))  # comes from this file
+            g.add((elongationSeriesIRI, DC.description, Literal("Stored at raw_data.elongation in the file")))  # where in the file
+
             print("Annotation complete.")
 
 #Serializing in jsonld and ttl

@@ -6,24 +6,25 @@
         "width": "mm",
         "thickness": "mm",
         "elongation": "mm",
+        "length": "mm",
         "force": "N",
         "strain": "mm/mm",
         "stress": "MPa"
     },
-    "Geometry": {
+    "geometry": {
         "width": 13.54,
         "thickness": 3.15,
-        "gauge_length": 50.0
+        "length": 50.0
     },
     "raw_data": {
-        "displacement": [
+        "elongation": [
             -4.5076951948885835e-05,
             -3.7488653958916984e-05,
             6.453916512327851e-05,
             9.465146888487652e-05,
             -2.243222496645103e-05
         ],
-        "load": [
+        "force": [
             -0.2827690541744232,
             -6.269662857055664,
             -6.8461480140686035,
