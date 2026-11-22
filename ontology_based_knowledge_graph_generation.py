@@ -317,10 +317,10 @@ for filename in os.listdir(input_dir):
             # Maps to Force at proof strength plastic extension f02 from TTO
             # Force at proof strength plastic extension f02 quality
             ysIRI_quality = URIRef(experimentIRI + "_yield_strength_quality")
-            g.add((ysIRI_quality, RDF.type, TTO.TTO_0000042))  # is a Force at proof strength plastic extension f02
-            g.add((processIRI, OBO.RO_0002234, ysIRI_quality))  # processIRI has output Force at proof strength plastic extension f02
-            g.add((testPieceIRI, PMD.PMD_0025998, ysIRI_quality))  # Test piece has relational quality Force at proof strength plastic extension f02
-            # Force at proof strength plastic extension f02 specification
+            g.add((ysIRI_quality, RDF.type, TTO.TTO_0000047))  # is proof strength plastic extension f02
+            g.add((processIRI, OBO.RO_0002234, ysIRI_quality))  # processIRI has output proof strength plastic extension f02
+            g.add((testPieceIRI, PMD.PMD_0025998, ysIRI_quality))  # Test piece has relational quality proof strength plastic extension f02
+            # proof strength plastic extension f02 specification
             ysIRI_scalar_value = URIRef(experimentIRI + "_yield_strength_scalar_value_specification")
             g.add((ysIRI_scalar_value, RDF.type, OBO.OBI_0001931))  # is a scalar value specification
             g.add((ysIRI_scalar_value, PMD.PMD_0000006, Literal(ysVal, datatype=XSD.float)))  # has value literal
